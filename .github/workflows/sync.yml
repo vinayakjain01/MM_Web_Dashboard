@@ -1,0 +1,33 @@
+name: Sync Google Sheet -> Supabase
+
+on:
+  schedule:
+    # Every 10 minutes. GitHub's schedule trigger is best-effort and can slip under load --
+    # fine for this use case. Do NOT switch this to Vercel cron on the Hobby plan: Hobby-tier
+    # cron is capped at once per day and will fail at deploy time above that cadence.
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run sheet sync
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          SHEET_SPREADSHEET_ID: ${{ secrets.SHEET_SPREADSHEET_ID }}
+        run: node scripts/sync-sheets.mjs

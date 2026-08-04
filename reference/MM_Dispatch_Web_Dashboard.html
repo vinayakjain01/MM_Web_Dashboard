@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mahima Mahajan — Dispatch & Fulfilment Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --bg:#F5F3FB;
+    --surface:#FFFFFF;
+    --surface-alt:#FBF9FF;
+    --primary:#4B2E83;
+    --primary-dark:#341F5C;
+    --primary-light:#8567C4;
+    --gold:#C6922E;
+    --gold-light:#F1DDAE;
+    --teal:#1E9E7C;
+    --teal-bg:#E3F5EE;
+    --amber:#E0972A;
+    --amber-bg:#FCEFDC;
+    --coral:#D6483F;
+    --coral-bg:#FBE6E4;
+    --text:#241A3D;
+    --text-secondary:#6B6280;
+    --text-muted:#9A93AE;
+    --border:#E7E2F0;
+    --shadow:rgba(75,46,131,0.09);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Manrope',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;margin:0;}
+  .wrap{max-width:1320px;margin:0 auto;padding:28px 32px 80px;}
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    gap:24px;flex-wrap:wrap;margin-bottom:22px;
+  }
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand-mark{
+    width:46px;height:46px;border-radius:12px;background:var(--primary);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    color:#fff;font-family:'Fraunces',serif;font-size:20px;font-weight:600;
+    box-shadow:0 6px 14px var(--shadow);
+  }
+  .brand-text h1{font-size:26px;color:var(--primary-dark);letter-spacing:.2px;}
+  .brand-text p{margin:2px 0 0;font-size:13px;color:var(--text-secondary);}
+  .topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .sync-tag{font-size:12px;color:var(--text-muted);border:1px solid var(--border);border-radius:20px;padding:6px 12px;background:var(--surface);}
+  .sync-tag i{color:var(--teal);margin-right:5px;}
+
+  .btn{
+    font-family:'Manrope',sans-serif;font-weight:600;font-size:13px;
+    border:1px solid var(--border);background:var(--surface);color:var(--text);
+    border-radius:10px;padding:9px 16px;cursor:pointer;transition:.15s;
+  }
+  .btn:hover{border-color:var(--primary-light);color:var(--primary);}
+  .btn-primary{background:var(--primary);color:#fff;border-color:var(--primary);}
+  .btn-primary:hover{background:var(--primary-dark);color:#fff;}
+
+  .toggle{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;gap:4px;}
+  .toggle button{
+    border:none;background:transparent;padding:8px 18px;border-radius:9px;
+    font-family:'Manrope',sans-serif;font-weight:700;font-size:13px;color:var(--text-secondary);cursor:pointer;
+  }
+  .toggle button.active{background:var(--primary);color:#fff;}
+
+  /* ---------- connect panel ---------- */
+  .connect-panel{
+    display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;margin-bottom:22px;box-shadow:0 4px 16px var(--shadow);
+  }
+  .connect-panel.open{display:block;}
+  .connect-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .connect-row input[type=text]{
+    flex:1;min-width:220px;padding:10px 14px;border:1px solid var(--border);border-radius:9px;
+    font-family:'Manrope',sans-serif;font-size:13px;color:var(--text);background:var(--surface-alt);
+  }
+  .connect-hint{font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.5;}
+  .connect-status{font-size:13px;font-weight:600;margin-top:10px;}
+  .connect-status.ok{color:var(--teal);}
+  .connect-status.err{color:var(--coral);}
+  .mapping-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px;}
+  .mapping-field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px;}
+  .mapping-field select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface-alt);color:var(--text);}
+
+  /* ---------- section headers with stitch signature ---------- */
+  .section-title{
+    font-size:15px;color:var(--primary-dark);text-transform:uppercase;letter-spacing:.06em;
+    padding-bottom:8px;margin:0 0 16px;border-bottom:2px dashed var(--gold);display:inline-block;
+  }
+
+  /* ---------- filters ---------- */
+  .filters{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:end;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:22px;
+  }
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);}
+  .field select,.field input[type=date]{
+    padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;
+    font-family:'Manrope',sans-serif;background:var(--surface-alt);color:var(--text);min-width:140px;
+  }
+  .field.search input{min-width:200px;}
+  .filters .btn{align-self:end;}
+
+  /* ---------- KPI grid ---------- */
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:28px;}
+  .kpi-card{
+    position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 18px 16px;box-shadow:0 3px 10px var(--shadow);overflow:hidden;
+  }
+  .kpi-card::before{
+    content:"";position:absolute;top:0;left:18px;width:28px;height:10px;
+    background:var(--accent,var(--gold));border-radius:0 0 4px 4px;
+  }
+  .kpi-label{font-size:12px;color:var(--text-secondary);font-weight:600;margin-top:6px;}
+  .kpi-value{font-family:'Fraunces',serif;font-size:28px;font-weight:600;color:var(--primary-dark);margin-top:6px;}
+  .kpi-sub{font-size:11.5px;color:var(--text-muted);margin-top:3px;}
+
+  /* ---------- charts ---------- */
+  .visuals-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .chart-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;box-shadow:0 3px 10px var(--shadow);
+  }
+  .chart-card h3{font-size:15px;color:var(--text);margin-bottom:12px;font-weight:600;font-family:'Manrope',sans-serif;}
+  .chart-card .chart-box{position:relative;height:260px;}
+  .chart-card.wide{grid-column:1 / -1;}
+
+  /* ---------- tables ---------- */
+  .tables-section{display:none;}
+  .tables-section.open{display:block;}
+  .table-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:0 3px 10px var(--shadow);}
+  .tab-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .tab-bar button{
+    border:1px solid var(--border);background:var(--surface-alt);color:var(--text-secondary);
+    font-family:'Manrope',sans-serif;font-weight:700;font-size:12.5px;border-radius:20px;padding:7px 15px;cursor:pointer;
+  }
+  .tab-bar button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+  .table-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
+  .table-count{font-size:12px;color:var(--text-muted);}
+  .table-scroll{max-height:480px;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+  table.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.data-table thead th{
+    position:sticky;top:0;background:var(--primary);color:#fff;text-align:left;
+    padding:10px 12px;font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;white-space:nowrap;
+  }
+  table.data-table tbody td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap;}
+  table.data-table tbody tr:nth-child(even){background:var(--surface-alt);}
+  table.data-table tbody tr:hover{background:var(--gold-light);}
+  .pill{border-radius:14px;padding:3px 10px;font-size:11.5px;font-weight:700;display:inline-block;}
+  .pill.good{background:var(--teal-bg);color:var(--teal);}
+  .pill.warn{background:var(--amber-bg);color:var(--amber);}
+  .pill.bad{background:var(--coral-bg);color:var(--coral);}
+  .pill.neutral{background:var(--surface-alt);color:var(--text-secondary);}
+
+  footer{text-align:center;color:var(--text-muted);font-size:12px;margin-top:40px;}
+
+  @media (max-width:900px){
+    .visuals-grid{grid-template-columns:1fr;}
+    .wrap{padding:20px 16px 60px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">MM</div>
+      <div class="brand-text">
+        <h1>Mahima Mahajan</h1>
+        <p>Dispatch &amp; fulfilment studio — live order dashboard</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span class="sync-tag" id="syncTag"><i>&#9679;</i>Sample data loaded</span>
+      <button class="btn" id="connectToggleBtn">Connect Google Sheet</button>
+      <div class="toggle" role="group" aria-label="View switch">
+        <button id="viewVisualsBtn" class="active">Visuals</button>
+        <button id="viewTablesBtn">Tables</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="connect-panel" id="connectPanel">
+    <div class="connect-row">
+      <input type="text" id="sheetUrlInput" placeholder="Paste your Google Sheet link (shared as 'Anyone with the link can view')">
+      <button class="btn btn-primary" id="connectBtn">Connect</button>
+      <button class="btn" id="useSampleBtn">Use sample data</button>
+    </div>
+    <div class="connect-hint">
+      Open your sheet → Share → set to "Anyone with the link" → Viewer, then paste the link here. Data is read directly in your browser — nothing is uploaded anywhere.
+    </div>
+    <div class="connect-status" id="connectStatus"></div>
+    <div class="mapping-grid" id="mappingGrid"></div>
+  </div>
+
+  <div class="filters" id="filtersBar">
+    <div class="field">
+      <label>From date</label>
+      <input type="date" id="fDateFrom">
+    </div>
+    <div class="field">
+      <label>To date</label>
+      <input type="date" id="fDateTo">
+    </div>
+    <div class="field">
+      <label>Country</label>
+      <select id="fCountry"><option value="">All countries</option></select>
+    </div>
+    <div class="field">
+      <label>Operational status</label>
+      <select id="fOpStatus"><option value="">All statuses</option></select>
+    </div>
+    <div class="field">
+      <label>Measurement status</label>
+      <select id="fMeasStatus"><option value="">All</option></select>
+    </div>
+    <button class="btn" id="resetFiltersBtn">Reset filters</button>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="visuals-section" id="visualsSection">
+    <h2 class="section-title">Visual analysis</h2>
+    <div class="visuals-grid">
+      <div class="chart-card"><h3>Orders by operational status</h3><div class="chart-box"><canvas id="chartStatus"></canvas></div></div>
+      <div class="chart-card"><h3>Balance due vs collected</h3><div class="chart-box"><canvas id="chartBalance"></canvas></div></div>
+      <div class="chart-card"><h3>Measurement status breakdown</h3><div class="chart-box"><canvas id="chartMeasurement"></canvas></div></div>
+      <div class="chart-card"><h3>Top products</h3><div class="chart-box"><canvas id="chartProducts"></canvas></div></div>
+      <div class="chart-card"><h3>Monthly order volume</h3><div class="chart-box"><canvas id="chartMonthly"></canvas></div></div>
+      <div class="chart-card"><h3>Monthly revenue</h3><div class="chart-box"><canvas id="chartRevenue"></canvas></div></div>
+      <div class="chart-card"><h3>Orders by country</h3><div class="chart-box"><canvas id="chartCountryOrders"></canvas></div></div>
+      <div class="chart-card"><h3>Revenue by country</h3><div class="chart-box"><canvas id="chartCountryRevenue"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="tables-section" id="tablesSection">
+    <h2 class="section-title">Order tables</h2>
+    <div class="table-card">
+      <div class="tab-bar" id="tableTabs">
+        <button data-tab="all" class="active">All orders</button>
+        <button data-tab="shipping5">Shipping in 5 days</button>
+        <button data-tab="missing">Missing measurements</button>
+        <button data-tab="balance">Balance due</button>
+      </div>
+      <div class="table-toolbar">
+        <input type="text" id="tableSearch" placeholder="Search customer, order no, product…" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;min-width:240px;background:var(--surface-alt);font-family:'Manrope',sans-serif;">
+        <span class="table-count" id="tableCount"></span>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table" id="dataTable">
+          <thead><tr id="tableHeadRow"></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>Sample data shown until a Google Sheet is connected · built for the Dispatch Dashboard</footer>
+</div>
+
+<script>
+/* ============ configuration ============ */
+const CURRENCY = '₹';
+const COLS = ['orderNo','customer','country','product','sku','orderDate','shipDate','opStatus','measStatus','sizeMeasure','amount','balance'];
+const COL_LABELS = {orderNo:'Order no',customer:'Customer',country:'Country',product:'Product',sku:'SKU',orderDate:'Order date',shipDate:'Ship date',opStatus:'Status',measStatus:'Measurement',sizeMeasure:'Size taken',amount:'Amount',balance:'Balance due'};
+const SYNONYMS = {
+  orderNo:['orderno','orderid','orderno.','ordernumber','order#','sono','order'],
+  customer:['customername','customer','clientname','name','client'],
+  country:['country','shipcountry','nation','destinationcountry'],
+  product:['productname','product','item','itemname'],
+  sku:['sku','skucode','itemcode','stylecode'],
+  orderDate:['orderdate','date','orderplaced','orderedon'],
+  shipDate:['shippingdate','shipdate','dispatchdate','deliverydate'],
+  opStatus:['operationalstatus','status','orderstatus','dispatchstatus'],
+  measStatus:['measurementstatus','measurestatus'],
+  sizeMeasure:['sizemeasurementsyesno','sizeandmeasurementsyesno','measurementstakenyesno','sizemeasurements'],
+  amount:['amount','orderamount','totalamount','invoiceamount','ordervalue','price','totalprice','netamount'],
+  balance:['balance','balancedue','balanceleft','amountdue','dueamount','pendingamount','outstandingbalance']
+};
+
+const COUNTRIES = ['India','United Arab Emirates','United States','United Kingdom','Australia','Canada','Singapore','Qatar'];
+const STATUSES = ['Dispatched','In Process','Pending','Delayed'];
+const PRODUCTS = ['Banarasi Saree','Bridal Lehenga','Anarkali Suit','Sharara Set','Kurta Set','Organza Saree'];
+
+let state = { raw:[], filtered:[], mode:'visuals', tableTab:'all', mapping:null, sourceHeaders:null };
+let charts = {};
+
+/* ============ helpers ============ */
+function normHeader(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+function fmtMoney(n){ return CURRENCY + Math.round(n).toLocaleString('en-IN'); }
+function fmtDate(d){ if(!(d instanceof Date) || isNaN(d)) return '—'; return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }
+function parseAmount(v){ if(v===undefined||v===null) return 0; const n = parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; }
+function parseDateLoose(v){
+  if(v instanceof Date) return v;
+  if(!v) return null;
+  let d = new Date(v);
+  if(!isNaN(d)) return d;
+  const m = String(v).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if(m){ const yr = m[3].length===2 ? '20'+m[3] : m[3]; d = new Date(+yr, +m[2]-1, +m[1]); if(!isNaN(d)) return d; }
+  return null;
+}
+function daysBetween(a,b){ return Math.round((b-a)/86400000); }
+function isCompleteMeasurement(v){
+  const s = String(v||'').toLowerCase();
+  if(!s) return false;
+  return !(s.includes('miss') || s.includes('pend') || s==='no');
+}
+function statusColor(s){
+  const k = String(s||'').toLowerCase();
+  if(k.includes('dispatch')) return {bg:'good'};
+  if(k.includes('delay') || k.includes('overdue')) return {bg:'bad'};
+  if(k.includes('pend') || k.includes('process')) return {bg:'warn'};
+  return {bg:'neutral'};
+}
+
+/* ============ sample data ============ */
+function buildSampleData(){
+  const rows = [];
+  const today = new Date();
+  const startMonth = new Date(today.getFullYear(), today.getMonth()-6, 1);
+  for(let i=0;i<96;i++){
+    const orderDate = new Date(startMonth.getTime() + Math.random()*(today.getTime()-startMonth.getTime()));
+    const leadDays = 4 + Math.floor(Math.random()*14);
+    const shipDate = new Date(orderDate.getTime() + leadDays*86400000);
+    const status = STATUSES[Math.floor(Math.random()*STATUSES.length)];
+    const measDone = Math.random() > 0.28;
+    const amount = 4000 + Math.floor(Math.random()*41000);
+    const hasBalance = Math.random() > 0.6;
+    const balance = hasBalance ? Math.round(amount * (0.1 + Math.random()*0.4)) : 0;
+    rows.push({
+      orderNo: 'MM-' + (1000+i),
+      customer: 'Customer ' + (i+1),
+      country: COUNTRIES[Math.floor(Math.random()*COUNTRIES.length)],
+      product: PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)],
+      sku: 'SKU-' + (2000+i),
+      orderDate, shipDate,
+      opStatus: status,
+      measStatus: measDone ? 'Done' : 'Missing',
+      sizeMeasure: measDone ? 'Yes' : 'No',
+      amount, balance
+    });
+  }
+  return rows;
+}
+
+/* ============ google sheet connect ============ */
+function toCsvUrl(url){
+  url = url.trim();
+  if(/output=csv/.test(url)) return url;
+  const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if(!m) return null;
+  const id = m[1];
+  const gidMatch = url.match(/gid=(\d+)/);
+  const gid = gidMatch ? gidMatch[1] : '0';
+  return 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv&gid=' + gid;
+}
+
+function detectMapping(headers){
+  const map = {};
+  const normed = headers.map(normHeader);
+  COLS.forEach(function(role){
+    let found = null;
+    const syns = SYNONYMS[role];
+    for(let i=0;i<normed.length;i++){ if(syns.indexOf(normed[i])>-1){ found = headers[i]; break; } }
+    if(!found){ for(let i=0;i<normed.length;i++){ if(syns.some(function(s){return normed[i].indexOf(s)>-1;})){ found = headers[i]; break; } } }
+    map[role] = found;
+  });
+  return map;
+}
+
+function normalizeRows(rawRows, mapping){
+  return rawRows.map(function(r){
+    return {
+      orderNo: mapping.orderNo ? r[mapping.orderNo] : '',
+      customer: mapping.customer ? r[mapping.customer] : '',
+      country: mapping.country ? r[mapping.country] : '',
+      product: mapping.product ? r[mapping.product] : '',
+      sku: mapping.sku ? r[mapping.sku] : '',
+      orderDate: parseDateLoose(mapping.orderDate ? r[mapping.orderDate] : null),
+      shipDate: parseDateLoose(mapping.shipDate ? r[mapping.shipDate] : null),
+      opStatus: mapping.opStatus ? r[mapping.opStatus] : '',
+      measStatus: mapping.measStatus ? r[mapping.measStatus] : '',
+      sizeMeasure: mapping.sizeMeasure ? r[mapping.sizeMeasure] : '',
+      amount: parseAmount(mapping.amount ? r[mapping.amount] : 0),
+      balance: parseAmount(mapping.balance ? r[mapping.balance] : 0)
+    };
+  }).filter(function(r){ return r.orderNo || r.customer; });
+}
+
+function renderMappingUI(headers, mapping){
+  const grid = document.getElementById('mappingGrid');
+  grid.innerHTML = '';
+  COLS.forEach(function(role){
+    const wrap = document.createElement('div');
+    wrap.className = 'mapping-field';
+    const label = document.createElement('label');
+    label.textContent = COL_LABELS[role];
+    const select = document.createElement('select');
+    select.dataset.role = role;
+    const noneOpt = document.createElement('option');
+    noneOpt.value=''; noneOpt.textContent='— not mapped —';
+    select.appendChild(noneOpt);
+    headers.forEach(function(h){
+      const opt = document.createElement('option');
+      opt.value = h; opt.textContent = h;
+      if(mapping[role]===h) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', applyMappingFromUI);
+    wrap.appendChild(label); wrap.appendChild(select);
+    grid.appendChild(wrap);
+  });
+}
+
+function applyMappingFromUI(){
+  const selects = document.querySelectorAll('#mappingGrid select');
+  const mapping = {};
+  selects.forEach(function(s){ mapping[s.dataset.role] = s.value || null; });
+  state.mapping = mapping;
+  state.raw = normalizeRows(state.rawSheetRows, mapping);
+  refreshFilterOptions();
+  applyFilters();
+}
+
+function connectSheet(){
+  const url = document.getElementById('sheetUrlInput').value;
+  const statusEl = document.getElementById('connectStatus');
+  const csvUrl = toCsvUrl(url);
+  if(!csvUrl){
+    statusEl.className = 'connect-status err';
+    statusEl.textContent = "Couldn't read that link. Paste the full Google Sheets URL (the one in your browser's address bar).";
+    return;
+  }
+  statusEl.className = 'connect-status';
+  statusEl.textContent = 'Connecting…';
+  Papa.parse(csvUrl, {
+    download:true, header:true, skipEmptyLines:true,
+    complete: function(results){
+      if(!results.data.length){
+        statusEl.className='connect-status err';
+        statusEl.textContent = 'No rows found. Make sure the sheet is shared as "Anyone with the link can view".';
+        return;
+      }
+      const headers = results.meta.fields;
+      const mapping = detectMapping(headers);
+      state.rawSheetRows = results.data;
+      state.mapping = mapping;
+      state.raw = normalizeRows(results.data, mapping);
+      renderMappingUI(headers, mapping);
+      refreshFilterOptions();
+      applyFilters();
+      statusEl.className='connect-status ok';
+      statusEl.textContent = 'Connected — ' + results.data.length + ' rows loaded. Check the mapping below if a chart looks off.';
+      document.getElementById('syncTag').innerHTML = '<i>&#9679;</i>Connected to Google Sheet';
+    },
+    error: function(err){
+      statusEl.className='connect-status err';
+      statusEl.textContent = "Couldn't load that sheet. Confirm it's shared as 'Anyone with the link can view' and try again.";
+    }
+  });
+}
+
+/* ============ filters ============ */
+function refreshFilterOptions(){
+  const countries = Array.from(new Set(state.raw.map(function(r){return r.country;}).filter(Boolean))).sort();
+  const opStatuses = Array.from(new Set(state.raw.map(function(r){return r.opStatus;}).filter(Boolean))).sort();
+  const measStatuses = Array.from(new Set(state.raw.map(function(r){return r.measStatus;}).filter(Boolean))).sort();
+  fillSelect('fCountry', countries, 'All countries');
+  fillSelect('fOpStatus', opStatuses, 'All statuses');
+  fillSelect('fMeasStatus', measStatuses, 'All');
+}
+function fillSelect(id, values, allLabel){
+  const el = document.getElementById(id);
+  const current = el.value;
+  el.innerHTML = '';
+  const allOpt = document.createElement('option'); allOpt.value=''; allOpt.textContent = allLabel;
+  el.appendChild(allOpt);
+  values.forEach(function(v){ const o = document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o); });
+  if(values.indexOf(current)>-1) el.value = current;
+}
+
+function applyFilters(){
+  const from = document.getElementById('fDateFrom').value ? new Date(document.getElementById('fDateFrom').value) : null;
+  const to = document.getElementById('fDateTo').value ? new Date(document.getElementById('fDateTo').value) : null;
+  const country = document.getElementById('fCountry').value;
+  const opStatus = document.getElementById('fOpStatus').value;
+  const measStatus = document.getElementById('fMeasStatus').value;
+  state.filtered = state.raw.filter(function(r){
+    if(from && r.orderDate && r.orderDate < from) return false;
+    if(to && r.orderDate && r.orderDate > to) return false;
+    if(country && r.country !== country) return false;
+    if(opStatus && r.opStatus !== opStatus) return false;
+    if(measStatus && r.measStatus !== measStatus) return false;
+    return true;
+  });
+  renderKPIs();
+  renderCharts();
+  renderTable();
+}
+
+/* ============ KPIs ============ */
+function renderKPIs(){
+  const rows = state.filtered;
+  const today = new Date();
+  const total = rows.length;
+  const dispatched = rows.filter(function(r){return String(r.opStatus).toLowerCase().includes('dispatch');}).length;
+  const shipping5 = rows.filter(function(r){
+    if(!r.shipDate) return false;
+    const d = daysBetween(today, r.shipDate);
+    return d>=0 && d<=5 && !String(r.opStatus).toLowerCase().includes('dispatch');
+  }).length;
+  const missingMeas = rows.filter(function(r){ return !isCompleteMeasurement(r.measStatus); }).length;
+  const completion = total ? Math.round(((total-missingMeas)/total)*100) : 0;
+  const revenue = rows.reduce(function(s,r){return s+r.amount;},0);
+  const balanceDue = rows.reduce(function(s,r){return s+r.balance;},0);
+  const countries = new Set(rows.map(function(r){return r.country;}).filter(Boolean)).size;
+
+  const cards = [
+    {label:'Total orders', value: total.toLocaleString('en-IN'), accent:'var(--primary)'},
+    {label:'Dispatched orders', value: dispatched.toLocaleString('en-IN'), accent:'var(--teal)'},
+    {label:'Shipping in 5 days', value: shipping5.toLocaleString('en-IN'), accent:'var(--amber)'},
+    {label:'Missing measurements', value: missingMeas.toLocaleString('en-IN'), accent:'var(--coral)'},
+    {label:'Measurement completion', value: completion+'%', accent:'var(--teal)'},
+    {label:'Total revenue', value: fmtMoney(revenue), accent:'var(--gold)'},
+    {label:'Balance due', value: fmtMoney(balanceDue), accent:'var(--coral)'},
+    {label:'Countries served', value: countries.toLocaleString('en-IN'), accent:'var(--primary-light)'}
+  ];
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+  cards.forEach(function(c){
+    const el = document.createElement('div');
+    el.className='kpi-card';
+    el.style.setProperty('--accent', c.accent);
+    el.innerHTML = '<div class="kpi-label">'+c.label+'</div><div class="kpi-value">'+c.value+'</div>';
+    grid.appendChild(el);
+  });
+}
+
+/* ============ charts ============ */
+function upsertChart(id, config){
+  if(charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id).getContext('2d'), config);
+}
+function groupCount(rows, key){
+  const map = {};
+  rows.forEach(function(r){ const k = r[key]||'Unspecified'; map[k]=(map[k]||0)+1; });
+  return map;
+}
+function groupSum(rows, key, valKey){
+  const map = {};
+  rows.forEach(function(r){ const k = r[key]||'Unspecified'; map[k]=(map[k]||0)+r[valKey]; });
+  return map;
+}
+function topEntries(map, n){
+  return Object.entries(map).sort(function(a,b){return b[1]-a[1];}).slice(0,n);
+}
+function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthLabel(key){
+  const [y,m] = key.split('-');
+  return new Date(+y, +m-1, 1).toLocaleDateString('en-IN',{month:'short',year:'2-digit'});
+}
+const PALETTE = ['#4B2E83','#C6922E','#1E9E7C','#8567C4','#E0972A','#D6483F','#6B6280','#341F5C'];
+const baseOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:{family:'Manrope'}}}} };
+
+function renderCharts(){
+  const rows = state.filtered;
+
+  const statusCounts = groupCount(rows,'opStatus');
+  upsertChart('chartStatus', {type:'bar', data:{labels:Object.keys(statusCounts), datasets:[{data:Object.values(statusCounts), backgroundColor:PALETTE}]},
+    options: Object.assign({}, baseOpts, {indexAxis:'y', plugins:{legend:{display:false}}})});
+
+  const revenue = rows.reduce(function(s,r){return s+r.amount;},0);
+  const balance = rows.reduce(function(s,r){return s+r.balance;},0);
+  const collected = Math.max(revenue-balance,0);
+  upsertChart('chartBalance', {type:'doughnut', data:{labels:['Collected','Balance due'], datasets:[{data:[collected,balance], backgroundColor:['#1E9E7C','#D6483F']}]}, options: baseOpts});
+
+  const measCounts = groupCount(rows,'measStatus');
+  upsertChart('chartMeasurement', {type:'doughnut', data:{labels:Object.keys(measCounts), datasets:[{data:Object.values(measCounts), backgroundColor:PALETTE}]}, options: baseOpts});
+
+  const prodCounts = groupCount(rows,'product');
+  const topProd = topEntries(prodCounts,8);
+  upsertChart('chartProducts', {type:'bar', data:{labels:topProd.map(function(e){return e[0];}), datasets:[{data:topProd.map(function(e){return e[1];}), backgroundColor:'#4B2E83'}]},
+    options: Object.assign({}, baseOpts, {indexAxis:'y', plugins:{legend:{display:false}}})});
+
+  const monthCounts = {};
+  rows.forEach(function(r){ if(r.orderDate){ const k = monthKey(r.orderDate); monthCounts[k]=(monthCounts[k]||0)+1; } });
+  const monthKeys = Object.keys(monthCounts).sort();
+  upsertChart('chartMonthly', {type:'line', data:{labels:monthKeys.map(monthLabel), datasets:[{data:monthKeys.map(function(k){return monthCounts[k];}), borderColor:'#4B2E83', backgroundColor:'rgba(75,46,131,0.12)', fill:true, tension:.35}]},
+    options: Object.assign({}, baseOpts, {plugins:{legend:{display:false}}})});
+
+  const monthRevenue = {};
+  rows.forEach(function(r){ if(r.orderDate){ const k = monthKey(r.orderDate); monthRevenue[k]=(monthRevenue[k]||0)+r.amount; } });
+  const revKeys = Object.keys(monthRevenue).sort();
+  upsertChart('chartRevenue', {type:'bar', data:{labels:revKeys.map(monthLabel), datasets:[{data:revKeys.map(function(k){return monthRevenue[k];}), backgroundColor:'#C6922E'}]},
+    options: Object.assign({}, baseOpts, {plugins:{legend:{display:false}}})});
+
+  const countryOrders = topEntries(groupCount(rows,'country'),8);
+  upsertChart('chartCountryOrders', {type:'bar', data:{labels:countryOrders.map(function(e){return e[0];}), datasets:[{data:countryOrders.map(function(e){return e[1];}), backgroundColor:'#8567C4'}]},
+    options: Object.assign({}, baseOpts, {indexAxis:'y', plugins:{legend:{display:false}}})});
+
+  const countryRevenue = topEntries(groupSum(rows,'country','amount'),8);
+  upsertChart('chartCountryRevenue', {type:'bar', data:{labels:countryRevenue.map(function(e){return e[0];}), datasets:[{data:countryRevenue.map(function(e){return e[1];}), backgroundColor:'#1E9E7C'}]},
+    options: Object.assign({}, baseOpts, {indexAxis:'y', plugins:{legend:{display:false}}})});
+}
+
+/* ============ tables ============ */
+function tableRowsForTab(tab){
+  const rows = state.filtered;
+  const today = new Date();
+  if(tab==='shipping5') return rows.filter(function(r){ if(!r.shipDate) return false; const d=daysBetween(today,r.shipDate); return d>=0 && d<=5 && !String(r.opStatus).toLowerCase().includes('dispatch'); });
+  if(tab==='missing') return rows.filter(function(r){ return !isCompleteMeasurement(r.measStatus); });
+  if(tab==='balance') return rows.filter(function(r){ return r.balance>0; });
+  return rows;
+}
+function renderTable(){
+  const search = (document.getElementById('tableSearch').value||'').toLowerCase();
+  let rows = tableRowsForTab(state.tableTab);
+  if(search){
+    rows = rows.filter(function(r){
+      return String(r.customer).toLowerCase().includes(search) || String(r.orderNo).toLowerCase().includes(search) || String(r.product).toLowerCase().includes(search);
+    });
+  }
+  const head = document.getElementById('tableHeadRow');
+  head.innerHTML = COLS.map(function(c){return '<th>'+COL_LABELS[c]+'</th>';}).join('');
+  const body = document.getElementById('tableBody');
+  body.innerHTML = rows.map(function(r){
+    return '<tr>' +
+      '<td>'+ (r.orderNo||'—') +'</td>' +
+      '<td>'+ (r.customer||'—') +'</td>' +
+      '<td>'+ (r.country||'—') +'</td>' +
+      '<td>'+ (r.product||'—') +'</td>' +
+      '<td>'+ (r.sku||'—') +'</td>' +
+      '<td>'+ fmtDate(r.orderDate) +'</td>' +
+      '<td>'+ fmtDate(r.shipDate) +'</td>' +
+      '<td><span class="pill '+statusColor(r.opStatus).bg+'">'+ (r.opStatus||'—') +'</span></td>' +
+      '<td><span class="pill '+(isCompleteMeasurement(r.measStatus)?'good':'bad')+'">'+ (r.measStatus||'—') +'</span></td>' +
+      '<td>'+ (r.sizeMeasure||'—') +'</td>' +
+      '<td>'+ fmtMoney(r.amount) +'</td>' +
+      '<td>'+ (r.balance>0 ? fmtMoney(r.balance) : '—') +'</td>' +
+      '</tr>';
+  }).join('');
+  document.getElementById('tableCount').textContent = 'Showing ' + rows.length + ' of ' + state.filtered.length + ' orders';
+}
+
+/* ============ view toggle & wiring ============ */
+function setMode(mode){
+  state.mode = mode;
+  document.getElementById('visualsSection').style.display = mode==='visuals' ? 'block' : 'none';
+  document.getElementById('tablesSection').classList.toggle('open', mode==='tables');
+  document.getElementById('viewVisualsBtn').classList.toggle('active', mode==='visuals');
+  document.getElementById('viewTablesBtn').classList.toggle('active', mode==='tables');
+}
+
+function init(){
+  state.raw = buildSampleData();
+  refreshFilterOptions();
+  applyFilters();
+  setMode('visuals');
+
+  document.getElementById('viewVisualsBtn').addEventListener('click', function(){ setMode('visuals'); });
+  document.getElementById('viewTablesBtn').addEventListener('click', function(){ setMode('tables'); });
+  document.getElementById('connectToggleBtn').addEventListener('click', function(){ document.getElementById('connectPanel').classList.toggle('open'); });
+  document.getElementById('connectBtn').addEventListener('click', connectSheet);
+  document.getElementById('useSampleBtn').addEventListener('click', function(){
+    state.raw = buildSampleData();
+    document.getElementById('mappingGrid').innerHTML='';
+    document.getElementById('connectStatus').className='connect-status';
+    document.getElementById('connectStatus').textContent='';
+    document.getElementById('syncTag').innerHTML = '<i>&#9679;</i>Sample data loaded';
+    refreshFilterOptions(); applyFilters();
+  });
+  ['fDateFrom','fDateTo','fCountry','fOpStatus','fMeasStatus'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', applyFilters);
+  });
+  document.getElementById('resetFiltersBtn').addEventListener('click', function(){
+    ['fDateFrom','fDateTo','fCountry','fOpStatus','fMeasStatus'].forEach(function(id){ document.getElementById(id).value=''; });
+    applyFilters();
+  });
+  document.querySelectorAll('#tableTabs button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#tableTabs button').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      state.tableTab = btn.dataset.tab;
+      renderTable();
+    });
+  });
+  document.getElementById('tableSearch').addEventListener('input', renderTable);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
