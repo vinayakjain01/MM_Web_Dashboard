@@ -62,7 +62,14 @@ export function ChartCard({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           label: (ctx: any) => {
             const parsed = ctx.parsed;
-            const raw = typeof parsed === 'number' ? parsed : (parsed?.x ?? parsed?.y ?? 0);
+            // Doughnut: parsed is a plain number. Otherwise the real value sits on
+            // whichever axis is the *value* axis, not the category axis -- for a
+            // horizontal bar (indexAxis 'y') that's parsed.x; for a vertical bar/line
+            // (indexAxis 'x', the default) that's parsed.y. Using "x ?? y" here previously
+            // always grabbed parsed.x first, which for vertical charts is just the
+            // category's array index (0, 1, 2...), not the data value -- e.g. hovering
+            // "Jun 26" (the 6th month, index 5) showed "5" instead of the real count.
+            const raw = typeof parsed === 'number' ? parsed : kind === 'bar-h' ? parsed.x : parsed.y;
             return `${ctx.label ? ctx.label + ': ' : ''}${formatValue(raw)}`;
           },
         },
