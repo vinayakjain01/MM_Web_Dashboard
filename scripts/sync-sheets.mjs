@@ -21,6 +21,8 @@ import {
   parseAmount,
   parseSheetDate,
 } from './lib/clean.mjs';
+import { classifyRowColor } from './lib/color.mjs';
+import { fetchImageAnchorsByTab, hasImageNear, isImageBridgeConfigured } from './lib/image-bridge.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, '..', '.env.local') });
@@ -38,6 +40,12 @@ export const MONTH_SHEETS = [
   { title: 'June 2026 / EOSS', gid: 1789133391 },
   { title: 'July 2026', gid: 1617166096 },
   { title: 'August 2026', gid: 1628602740 },
+  // Sister product line (shopmmvm.com, not mahimamahajan.in) with its own order-number
+  // sequence, some of it shared with the main brand's. Its own tab, not previously
+  // synced. Rows in the OTHER tabs that just say "MMVM" in a giant merged banner are
+  // cross-reference markers pointing here, not real orders in their host tab -- those get
+  // dropped at ingestion (see the marker-row check below), not counted as broken orders.
+  { title: 'MMVM 2026', gid: 1352270413 },
 ];
 
 const NUMERIC_FIELDS = {
@@ -87,12 +95,43 @@ async function resolveTabTitles(sheets, spreadsheetId) {
   }).filter(Boolean);
 }
 
-function mapTabRows(tabTitle, values) {
+// The manual row-highlight (red = cancelled, green = dispatched) is a *format*, not a
+// value -- values.batchGet never returns it, so this needs a separate spreadsheets.get
+// call with an explicit field mask. One call covers every tab (multiple `ranges`, one per
+// sheet); matched back up by title via `sheets.properties.title` in the response, since
+// the API doesn't promise the returned sheet order matches the ranges' order.
+async function fetchRowColorsByTab(sheets, spreadsheetId, tabs) {
+  const ranges = tabs.map((t) => `${quoteSheetName(t.resolvedTitle)}!A1:Z2000`);
+  const { data } = await sheets.spreadsheets.get({
+    spreadsheetId,
+    ranges,
+    fields: 'sheets.properties.title,sheets.data.rowData.values.userEnteredFormat.backgroundColor',
+  });
+  const byTitle = new Map();
+  for (const sheet of data.sheets || []) {
+    byTitle.set(sheet.properties.title, sheet.data?.[0]?.rowData || []);
+  }
+  return byTitle;
+}
+
+function mapTabRows(tabTitle, values, colorRowData, imageAnchors) {
   if (!values || values.length === 0) return [];
   const headerIdx = findHeaderRowIndex(values);
   const headers = values[headerIdx] || [];
   const mapping = detectMapping(headers);
   const orderNoIdx = resolveOrderNoColumnIndex(tabTitle, headers);
+  const sizeMeasurementsColumn1Indexed = mapping.sizeMeasurements + 1; // Sheets rows/cols are 1-indexed
+
+  // Order No / Order Date / Shipping Date / Customer Name cells are vertically merged
+  // across a multi-line order in this sheet (confirmed empirically: continuation rows
+  // consistently show no background color in those columns specifically, even though the
+  // row genuinely is colored). Product Name is the first column after that merged block,
+  // never merged, never blank -- reading color there instead of column A is what makes
+  // this reliable per-row. See README "Known data-quality facts".
+  const colorColumnIdx = mapping.productName;
+  if (colorColumnIdx === -1) {
+    console.warn(`[sync] "${tabTitle}": no Product Name column found -- cannot read row color, defaulting to "No Update"`);
+  }
 
   const get = (row, idx) => (idx >= 0 && idx < row.length ? row[idx] : null);
 
@@ -101,26 +140,52 @@ function mapTabRows(tabTitle, values) {
   for (let i = headerIdx + 1; i < values.length; i++) {
     const row = values[i];
     if (isRowBlank(row)) continue;
+
+    const productName = cleanText(get(row, mapping.productName));
+    const customerName = cleanText(get(row, mapping.customerName));
+    // Not a real order line: a cross-reference banner to another product line/tab (e.g.
+    // "MMVM", a giant merged cell spanning most of the row) or a month-name section-label
+    // row within a tab (e.g. "MARCH", "APRIL" in MMVM 2026) both have SOME cell filled
+    // (often the order-no column) but no actual customer or product -- confirmed by
+    // direct inspection, not a guess. A genuine order/continuation line always has at
+    // least one of these. See README "Known data-quality facts".
+    if (!productName && !customerName) continue;
+
     sourceRowNumber += 1;
 
     const record = {
       source_sheet: tabTitle,
       source_row_number: sourceRowNumber,
       order_no: cleanOrderNo(get(row, orderNoIdx)),
-      customer_name: cleanText(get(row, mapping.customerName)),
+      customer_name: customerName,
       // Dedicated Country cell wins when present (normalized -- it's entered
       // inconsistently: "USA"/"US"/"United states"/"INDIA"/"UK" all mean one thing each);
       // otherwise best-effort extraction from the Address block (the ops team stopped
       // filling Country in on later tabs -- see extractCountryFromAddress for what this
       // can and can't recover).
       country: normalizeCountry(get(row, mapping.country)) || extractCountryFromAddress(get(row, mapping.address)),
-      product_name: cleanText(get(row, mapping.productName)),
+      product_name: productName,
       sku: cleanText(get(row, mapping.sku)),
       order_date: parseSheetDate(get(row, mapping.orderDate)),
       shipping_date: parseSheetDate(get(row, mapping.shippingDate)),
       order_status: cleanText(get(row, mapping.orderStatus)),
-      size_measurements: cleanSizeMeasurements(get(row, mapping.sizeMeasurements)),
+      size_measurements: (() => {
+        const text = cleanSizeMeasurements(get(row, mapping.sizeMeasurements));
+        if (text) return text;
+        // Text cell is blank -- could still be a floating photo of handwritten
+        // measurements, which the Sheets API can't see as a cell value at all (see
+        // apps-script/image-bridge.gs). Only checked when the bridge is configured.
+        const sheetRow1Indexed = i + 1;
+        if (imageAnchors && hasImageNear(imageAnchors, sheetRow1Indexed, sizeMeasurementsColumn1Indexed)) {
+          return 'photo';
+        }
+        return text;
+      })(),
       payment_mode: cleanText(get(row, mapping.paymentMode)),
+      sheet_status_color:
+        colorColumnIdx === -1
+          ? 'No Update'
+          : classifyRowColor(colorRowData?.[i]?.values?.[colorColumnIdx]?.userEnteredFormat?.backgroundColor),
     };
     for (const [field, column] of Object.entries(NUMERIC_FIELDS)) {
       record[column] = parseAmount(get(row, mapping[field]));
@@ -166,18 +231,31 @@ async function main() {
     const sheets = await getSheetsClient();
     const tabs = await resolveTabTitles(sheets, spreadsheetId);
 
+    if (!isImageBridgeConfigured()) {
+      console.log('[sync] Apps Script image bridge not configured -- skipping floating-photo measurement detection.');
+    }
+
     const ranges = tabs.map((t) => `${quoteSheetName(t.resolvedTitle)}!A1:AZ2000`);
-    const { data: batch } = await sheets.spreadsheets.values.batchGet({
-      spreadsheetId,
-      ranges,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-      dateTimeRenderOption: 'FORMATTED_STRING',
-    });
+    const [{ data: batch }, colorsByTab, imageAnchorsByTab] = await Promise.all([
+      sheets.spreadsheets.values.batchGet({
+        spreadsheetId,
+        ranges,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+        dateTimeRenderOption: 'FORMATTED_STRING',
+      }),
+      fetchRowColorsByTab(sheets, spreadsheetId, tabs),
+      fetchImageAnchorsByTab(
+        spreadsheetId,
+        tabs.map((t) => t.resolvedTitle),
+      ),
+    ]);
 
     const allRows = [];
     tabs.forEach((tab, i) => {
       const values = batch.valueRanges[i]?.values || [];
-      allRows.push(...mapTabRows(tab.title, values));
+      const colorRowData = colorsByTab.get(tab.resolvedTitle) || [];
+      const imageAnchors = imageAnchorsByTab[tab.resolvedTitle] || [];
+      allRows.push(...mapTabRows(tab.title, values, colorRowData, imageAnchors));
     });
 
     console.log(`[sync] total rows across ${tabs.length} tabs: ${allRows.length}`);

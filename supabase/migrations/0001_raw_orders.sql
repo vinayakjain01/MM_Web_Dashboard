@@ -23,6 +23,11 @@ create table if not exists raw_orders (
   order_status           text,
   size_measurements      text,
   payment_mode           text,
+  -- Manual row highlight: red = cancelled, green = dispatched, no fill = 'No Update'.
+  -- Read from the Product Name column (see scripts/sync-sheets.mjs), not column A --
+  -- Order No/Date/Customer Name cells are vertically merged across a multi-line order in
+  -- this sheet, so continuation rows show no color there even though the row is colored.
+  sheet_status_color     text not null default 'No Update',
   order_amount_mrp       numeric,
   shipping_charges       numeric,
   customization_charges  numeric,

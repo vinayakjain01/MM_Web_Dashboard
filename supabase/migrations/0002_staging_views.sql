@@ -17,20 +17,30 @@
 --
 --    Classic grouping trick: COUNT(x) OVER (... ORDER BY row) never decrements, so it's
 --    constant for every row that "belongs" to the same non-null seed value.
+--
+--    IMPORTANT: customer_grp/ship_grp must be nested INSIDE order_grp (partition by
+--    source_sheet, order_grp, ...), not just source_sheet. A row can have its OWN
+--    order_no (starting a new order_grp) while still having a blank shipping_date/
+--    customer_name for an unrelated structural reason -- e.g. a giant merged "banner" row
+--    (see the MMVM cross-reference rows in April/May/June/July 2026) swallows every cell
+--    except the merge's anchor column. Without the order_grp boundary, such a row
+--    incorrectly inherits the *previous, unrelated* order's shipping_date/customer_name
+--    instead of correctly staying blank. Confirmed against real data: order #6025 (July
+--    2026, a pure MMVM marker row) was inheriting order #6024's ship date before this fix.
 create or replace view stg_orders_filled as
 with tagged as (
   select
     r.*,
     count(order_no) over (partition by source_sheet order by source_row_number)      as order_grp,
-    count(customer_name) over (partition by source_sheet order by source_row_number) as customer_grp,
-    count(shipping_date) over (partition by source_sheet order by source_row_number)  as ship_grp
+    count(customer_name) over (partition by source_sheet order by source_row_number) as customer_grp_raw,
+    count(shipping_date) over (partition by source_sheet order by source_row_number)  as ship_grp_raw
   from raw_orders r
 )
 select
   t.*,
   first_value(order_no) over (partition by source_sheet, order_grp order by source_row_number) as order_no_filled,
-  first_value(customer_name) over (partition by source_sheet, customer_grp order by source_row_number) as customer_name_filled,
-  first_value(shipping_date) over (partition by source_sheet, ship_grp order by source_row_number) as shipping_date_filled
+  first_value(customer_name) over (partition by source_sheet, order_grp, customer_grp_raw order by source_row_number) as customer_name_filled,
+  first_value(shipping_date) over (partition by source_sheet, order_grp, ship_grp_raw order by source_row_number) as shipping_date_filled
 from tagged t;
 
 -- 2) Row filters, matching the original recipe per sheet:
@@ -58,7 +68,13 @@ where
 
 -- 3) Measurement status derivation (order-level, not row-level -- one order can have
 --    multiple product rows, and if ANY row has a real measurement the order counts as
---    received).
+--    received). Same view also derives order-level sheet_status from the manual row
+--    color (see 0001): checked against real data, individual lines within one order
+--    sometimes disagree (a line can be missing its color while a sibling line has it --
+--    never seen a real order with conflicting Cancelled-vs-Dispatched lines, only
+--    "colored vs not colored yet" gaps), so this is a bool_or aggregate up to the whole
+--    order -- the same pattern as order_has_measurement below -- rather than a sequential
+--    fill-down. Cancelled takes precedence over Dispatched if somehow both appear.
 create or replace view stg_orders_measurement as
 with normed as (
   select
@@ -85,5 +101,10 @@ with_flag as (
 )
 select
   *,
-  bool_or(has_measurement) over (partition by order_no_filled) as order_has_measurement
+  bool_or(has_measurement) over (partition by order_no_filled) as order_has_measurement,
+  case
+    when bool_or(sheet_status_color = 'Cancelled') over (partition by order_no_filled) then 'Cancelled'
+    when bool_or(sheet_status_color = 'Dispatched') over (partition by order_no_filled) then 'Dispatched'
+    else 'No Update'
+  end as sheet_status
 from with_flag;

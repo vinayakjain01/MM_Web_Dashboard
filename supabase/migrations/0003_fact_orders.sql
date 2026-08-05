@@ -14,6 +14,7 @@ select distinct on (order_no_filled, product_name, sku, order_date)
   shipping_date_filled      as shipping_date,
   order_status,
   case when order_has_measurement then 'Received' else 'Missing' end as measurement_status,
+  sheet_status,
   size_measurements,
   source_sheet,
   payment_mode,

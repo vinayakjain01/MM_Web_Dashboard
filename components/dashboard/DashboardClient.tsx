@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { ChartCard } from './ChartCard';
 import { fmtDate, fmtMoney, fmtRelativeTime } from '@/lib/format';
-import { estimatedStatusPillClass } from '@/lib/orders';
+import { operationalStatusPillClass } from '@/lib/orders';
 import type { DashboardResponse, TableTab } from '@/lib/orders';
 
 type Mode = 'visuals' | 'tables';
@@ -24,7 +24,7 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: 'sku', label: 'SKU' },
   { key: 'order_date', label: 'Order date' },
   { key: 'shipping_date', label: 'Ship date' },
-  { key: 'estimated_status', label: 'Status (est.)' },
+  { key: 'operational_status', label: 'Status' },
   { key: 'measurement_status', label: 'Measurement' },
   { key: 'total', label: 'Amount' },
   { key: 'balance', label: 'Balance due' },
@@ -81,7 +81,8 @@ export function DashboardClient({ initialData }: { initialData: DashboardRespons
 
   const kpiCards = [
     { label: 'Total orders', value: view.kpis.totalOrders.toLocaleString('en-IN'), accent: 'var(--primary)' },
-    { label: 'Shipped (estimated)', value: view.kpis.dispatchedOrders.toLocaleString('en-IN'), accent: 'var(--teal)' },
+    { label: 'Dispatched orders', value: view.kpis.dispatchedOrders.toLocaleString('en-IN'), accent: 'var(--teal)' },
+    { label: 'Cancelled orders', value: view.kpis.cancelledOrders.toLocaleString('en-IN'), accent: 'var(--coral)' },
     { label: 'Shipping in 5 days', value: view.kpis.shippingIn5Days.toLocaleString('en-IN'), accent: 'var(--amber)' },
     { label: 'Missing measurements', value: view.kpis.missingMeasurements.toLocaleString('en-IN'), accent: 'var(--coral)' },
     { label: 'Measurement completion', value: `${view.kpis.measurementCompletionPct}%`, accent: 'var(--teal)' },
@@ -153,8 +154,8 @@ export function DashboardClient({ initialData }: { initialData: DashboardRespons
           </select>
         </div>
         <div className="field">
-          <label title="Estimated from ship date vs today -- not a confirmed dispatch signal">
-            Shipping status (est.)
+          <label title="From the sheet's own Dispatched/Cancelled marking when set; estimated from ship date otherwise">
+            Status
           </label>
           <select value={opStatus} onChange={(e) => setOpStatus(e.target.value)}>
             <option value="">All statuses</option>
@@ -194,7 +195,7 @@ export function DashboardClient({ initialData }: { initialData: DashboardRespons
         <div>
           <h2 className="section-title">Visual analysis</h2>
           <div className="visuals-grid">
-            <ChartCard title="Orders by shipping status (estimated)" kind="bar-h" labels={view.charts.ordersByStatus.labels} data={view.charts.ordersByStatus.data} colors={undefined} />
+            <ChartCard title="Orders by status" kind="bar-h" labels={view.charts.ordersByStatus.labels} data={view.charts.ordersByStatus.data} colors={undefined} />
             <ChartCard title="Balance due vs collected" kind="doughnut" labels={view.charts.balanceVsCollected.labels} data={view.charts.balanceVsCollected.data} colors={['#1E9E7C', '#D6483F']} valueFormat="currency" />
             <ChartCard title="Measurement status breakdown" kind="doughnut" labels={view.charts.measurementBreakdown.labels} data={view.charts.measurementBreakdown.data} />
             <ChartCard title="Top products" kind="bar-h" labels={view.charts.topProducts.labels} data={view.charts.topProducts.data} color="#4B2E83" />
@@ -247,8 +248,8 @@ export function DashboardClient({ initialData }: { initialData: DashboardRespons
                       <td>{fmtDate(r.order_date)}</td>
                       <td>{fmtDate(r.shipping_date)}</td>
                       <td>
-                        <span className={`pill ${estimatedStatusPillClass(r.estimated_status)}`}>
-                          {r.estimated_status}
+                        <span className={`pill ${operationalStatusPillClass(r.operational_status)}`}>
+                          {r.operational_status}
                         </span>
                       </td>
                       <td>

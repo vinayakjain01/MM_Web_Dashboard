@@ -9,6 +9,7 @@ export type OrderRow = {
   order_date: string | null; // ISO date
   shipping_date: string | null; // ISO date
   order_status: string | null; // always null in the live sheet -- no such column exists
+  sheet_status: 'Cancelled' | 'Dispatched' | 'No Update'; // manual row-color signal, order-level aggregated in SQL
   measurement_status: string | null; // 'Received' | 'Missing'
   size_measurements: string | null;
   source_sheet: string | null;
@@ -22,29 +23,45 @@ export type OrderRow = {
   balance: number;
 };
 
-// The sheet has no real dispatch/operational-status column at all -- confirmed by
-// inspecting every tab's headers directly. This is a deliberate estimate derived purely
-// from shipping_date vs "today" (Asia/Kolkata), not a confirmed dispatch signal: an order
-// can be actually shipped early/late with no way to tell from this data. Always label it
-// as an estimate in the UI rather than presenting it as fact.
-export type EstimatedStatus = 'Shipped' | 'Upcoming' | 'Scheduled' | 'Unscheduled';
-export const ESTIMATED_STATUSES: EstimatedStatus[] = ['Shipped', 'Upcoming', 'Scheduled', 'Unscheduled'];
+// The manually-applied row color (red = cancelled, green = dispatched) is real,
+// authoritative signal -- it overrides the shipping-date guess whenever present. The
+// date-based guess is used only as a fallback for orders with no color at all ('No
+// Update'), since the sheet has no other dispatch/status column (confirmed by inspecting
+// every tab's headers directly).
+export type OperationalStatus = 'Cancelled' | 'Dispatched' | 'Shipping Soon' | 'In Progress' | 'Unknown';
+export const OPERATIONAL_STATUSES: OperationalStatus[] = [
+  'Cancelled',
+  'Dispatched',
+  'Shipping Soon',
+  'In Progress',
+  'Unknown',
+];
 
-export type EnrichedOrderRow = OrderRow & { estimated_status: EstimatedStatus };
+export type EnrichedOrderRow = OrderRow & { operational_status: OperationalStatus };
 
-export function computeEstimatedStatus(shippingDate: string | null, today: string): EstimatedStatus {
-  if (!shippingDate) return 'Unscheduled';
+export function computeOperationalStatus(
+  sheetStatus: OrderRow['sheet_status'],
+  shippingDate: string | null,
+  today: string,
+): OperationalStatus {
+  if (sheetStatus === 'Cancelled') return 'Cancelled';
+  if (sheetStatus === 'Dispatched') return 'Dispatched';
+  // No color signal at all for this order -- fall back to a guess from shipping_date.
+  if (!shippingDate) return 'Unknown';
   const d = daysBetween(today, shippingDate);
-  if (d < 0) return 'Shipped';
-  if (d <= 5) return 'Upcoming';
-  return 'Scheduled';
+  if (d < 0) return 'Dispatched';
+  if (d <= 5) return 'Shipping Soon';
+  return 'In Progress';
 }
 
 // Enrichment must happen server-side, once per request, using the business ("Asia/Kolkata")
 // clock -- never recomputed client-side, where "today" would mean the visitor's own
 // timezone. See lib/kolkata.ts.
 export function enrichRows(rows: OrderRow[], today = kolkataToday()): EnrichedOrderRow[] {
-  return rows.map((r) => ({ ...r, estimated_status: computeEstimatedStatus(r.shipping_date, today) }));
+  return rows.map((r) => ({
+    ...r,
+    operational_status: computeOperationalStatus(r.sheet_status, r.shipping_date, today),
+  }));
 }
 
 export type OrderFilters = {
@@ -60,11 +77,15 @@ export function isMeasurementComplete(r: OrderRow): boolean {
   return r.measurement_status === 'Received';
 }
 
-export function estimatedStatusPillClass(status: EstimatedStatus): 'good' | 'warn' | 'bad' | 'neutral' {
-  if (status === 'Shipped') return 'good';
-  if (status === 'Upcoming') return 'warn';
-  if (status === 'Unscheduled') return 'bad'; // no ship date set at all is worth flagging
-  return 'neutral'; // Scheduled
+export function isCancelled(r: EnrichedOrderRow): boolean {
+  return r.operational_status === 'Cancelled';
+}
+
+export function operationalStatusPillClass(status: OperationalStatus): 'good' | 'warn' | 'bad' | 'neutral' {
+  if (status === 'Dispatched') return 'good';
+  if (status === 'Shipping Soon') return 'warn';
+  if (status === 'Cancelled' || status === 'Unknown') return 'bad';
+  return 'neutral'; // In Progress
 }
 
 function groupCount(rows: EnrichedOrderRow[], key: (r: EnrichedOrderRow) => string): Record<string, number> {
@@ -115,7 +136,7 @@ export function applyFilters(rows: EnrichedOrderRow[], f: OrderFilters): Enriche
     if (f.from && r.order_date && r.order_date < f.from) return false;
     if (f.to && r.order_date && r.order_date > f.to) return false;
     if (f.country && r.country !== f.country) return false;
-    if (f.opStatus && r.estimated_status !== f.opStatus) return false;
+    if (f.opStatus && r.operational_status !== f.opStatus) return false;
     if (f.measStatus && r.measurement_status !== f.measStatus) return false;
     if (search) {
       const hay = `${r.customer_name || ''} ${r.order_no || ''} ${r.product_name || ''}`.toLowerCase();
@@ -126,18 +147,29 @@ export function applyFilters(rows: EnrichedOrderRow[], f: OrderFilters): Enriche
 }
 
 export function computeKpis(rows: EnrichedOrderRow[]) {
+  // Total Orders counts every order, cancelled included -- never filter this one.
   const total = rows.length;
-  const shipped = rows.filter((r) => r.estimated_status === 'Shipped').length;
-  const shippingSoon = rows.filter((r) => r.estimated_status === 'Upcoming').length;
-  const missingMeasurements = rows.filter((r) => !isMeasurementComplete(r)).length;
-  const completionPct = total ? Math.round(((total - missingMeasurements) / total) * 100) : 0;
+  const cancelled = rows.filter(isCancelled).length;
+  const dispatched = rows.filter((r) => r.operational_status === 'Dispatched').length;
+  const shippingSoon = rows.filter((r) => r.operational_status === 'Shipping Soon').length;
+
+  // Missing-measurements and its completion % exclude cancelled orders -- a cancelled
+  // order's measurements are no longer operationally relevant, and this must match the
+  // "Missing measurements" table tab's own count (see rowsForTab).
+  const active = rows.filter((r) => !isCancelled(r));
+  const missingMeasurements = active.filter((r) => !isMeasurementComplete(r)).length;
+  const completionPct = active.length
+    ? Math.round(((active.length - missingMeasurements) / active.length) * 100)
+    : 0;
+
   const revenue = rows.reduce((s, r) => s + r.total, 0);
   const balanceDue = rows.reduce((s, r) => s + r.balance, 0);
   const countries = new Set(rows.map((r) => r.country).filter(Boolean)).size;
 
   return {
     totalOrders: total,
-    dispatchedOrders: shipped,
+    cancelledOrders: cancelled,
+    dispatchedOrders: dispatched,
     shippingIn5Days: shippingSoon,
     missingMeasurements,
     measurementCompletionPct: completionPct,
@@ -148,7 +180,7 @@ export function computeKpis(rows: EnrichedOrderRow[]) {
 }
 
 export function computeCharts(rows: EnrichedOrderRow[]) {
-  const statusCounts = groupCount(rows, (r) => r.estimated_status);
+  const statusCounts = groupCount(rows, (r) => r.operational_status);
 
   const revenue = rows.reduce((s, r) => s + r.total, 0);
   const balance = rows.reduce((s, r) => s + r.balance, 0);
@@ -208,8 +240,10 @@ export function computeCharts(rows: EnrichedOrderRow[]) {
 export type TableTab = 'all' | 'shipping5' | 'missing' | 'balance';
 
 export function rowsForTab(rows: EnrichedOrderRow[], tab: TableTab): EnrichedOrderRow[] {
-  if (tab === 'shipping5') return rows.filter((r) => r.estimated_status === 'Upcoming');
-  if (tab === 'missing') return rows.filter((r) => !isMeasurementComplete(r));
+  // 'all' and 'balance' intentionally do NOT exclude cancelled orders -- only the two
+  // views below do, matching an explicit, confirmed decision (not a default guess).
+  if (tab === 'shipping5') return rows.filter((r) => r.operational_status === 'Shipping Soon');
+  if (tab === 'missing') return rows.filter((r) => !isMeasurementComplete(r) && !isCancelled(r));
   if (tab === 'balance') return rows.filter((r) => r.balance > 0);
   return rows;
 }
@@ -217,7 +251,7 @@ export function rowsForTab(rows: EnrichedOrderRow[], tab: TableTab): EnrichedOrd
 export function filterOptions(rows: EnrichedOrderRow[]) {
   return {
     countries: Array.from(new Set(rows.map((r) => r.country).filter(Boolean))).sort() as string[],
-    opStatuses: ESTIMATED_STATUSES,
+    opStatuses: OPERATIONAL_STATUSES,
     measStatuses: Array.from(
       new Set(rows.map((r) => r.measurement_status).filter(Boolean)),
     ).sort() as string[],

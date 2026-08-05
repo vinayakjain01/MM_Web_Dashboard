@@ -48,6 +48,9 @@ OAuth as your own Google account, which works fine with Viewer access. See
    `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN`, `SHEET_SPREADSHEET_ID`.
    (`SUPABASE_URL` here is the same value as `NEXT_PUBLIC_SUPABASE_URL` locally — no
    `NEXT_PUBLIC_` prefix needed in Actions since nothing there goes into a browser bundle.)
+   Also add `APPS_SCRIPT_IMAGE_BRIDGE_URL` / `APPS_SCRIPT_SHARED_SECRET` here once you've
+   done the one-time setup below, if you want photo-detection to run in the scheduled sync
+   too (optional — the sync works fine without it).
 
 5. **Try a sync manually**: `npm run sync`. Check the `sync_runs` table in Supabase for
    the outcome, and `raw_orders` for row counts per `source_sheet`.
@@ -59,6 +62,39 @@ OAuth as your own Google account, which works fine with Viewer access. See
 Add one entry to the `MONTH_SHEETS` array in `scripts/sync-sheets.mjs` (title + gid). No
 SQL migration needed — `raw_orders` is one table for every tab, discriminated by
 `source_sheet`; a new tab just becomes a new `source_sheet` value on the next sync.
+
+## Apps Script image bridge (optional)
+
+Some measurement photos are pasted into the sheet as **floating images** (Insert > Image
+> Insert image over cells), not as cell values or `=IMAGE()` formulas. Confirmed directly:
+that kind of cell reads back 100% empty from the Sheets REST API — there is no way for
+`scripts/sync-sheets.mjs` to see these on its own. `Sheet.getImages()` in Google Apps
+Script *can* see them, so a small standalone Apps Script, deployed as a Web App, bridges
+that gap. The sync job works fine without this — it just can't tell "a photo was pasted
+here" from "genuinely nothing was provided" until it's set up.
+
+One-time setup:
+
+1. Go to [script.google.com](https://script.google.com) → **New project**. (Standalone —
+   don't create it from inside the spreadsheet; no Editor access to the sheet is needed,
+   only whatever access this account already has, which is at least Viewer.)
+2. Delete the placeholder code and paste in the contents of `apps-script/image-bridge.gs`
+   from this repo.
+3. **Project Settings** (gear icon) → **Script Properties** → add one:
+   `SHARED_SECRET` = the value already in your `.env.local` as
+   `APPS_SCRIPT_SHARED_SECRET` (a random value was generated for you there — copy it
+   verbatim, don't invent a new one, or the two ends won't match).
+4. **Deploy** → **New deployment** → type **Web app** → Execute as **Me**, Who has access
+   **Anyone**. Authorize the requested permissions (it only asks for spreadsheet *read*
+   access). Copy the resulting web app URL.
+5. Paste that URL into `.env.local` as `APPS_SCRIPT_IMAGE_BRIDGE_URL` (and as a GitHub
+   Actions secret of the same name, if you want this in the scheduled sync too).
+6. Re-run `npm run sync` — you should no longer see the "image bridge not configured" log
+   line.
+
+If you ever edit `image-bridge.gs`, you have to **create a new deployment version**
+(Deploy → Manage deployments → edit → new version) for the change to take effect at the
+existing URL — saving the file alone doesn't update a published Web App.
 
 ## Data pipeline
 
@@ -83,15 +119,45 @@ SQL migration needed — `raw_orders` is one table for every tab, discriminated 
 Found by inspecting real data after the first sync (2026-08-04) — not guesses, and worth
 knowing before "fixing" something that's actually working as designed:
 
-- **There is no dispatch/operational-status column anywhere in the sheet.** All 10 tabs
-  were checked directly; none has a Dispatched/Pending/Delayed-style field. "Status" in
-  this dashboard (`estimated_status` in `lib/orders.ts`, computed by
-  `computeEstimatedStatus`) is therefore a **derived estimate from `shipping_date` vs
-  today (Asia/Kolkata)** — `Shipped` (ship date passed), `Upcoming` (0–5 days out),
-  `Scheduled` (further out), `Unscheduled` (no ship date at all) — not a confirmed dispatch
-  signal. The UI labels this "(estimated)"/"(est.)" everywhere it appears; don't remove
-  that qualifier, and don't be surprised the raw `order_status` column is always null —
-  that's not a bug, it reflects a genuine gap in the source data.
+- **There is no dispatch/operational-status *column* anywhere in the sheet** (all 10 tabs
+  checked directly; the raw `order_status` field is always null — not a bug). The real
+  signal is a **manual row background color** instead: the ops team highlights a whole
+  order row red (cancelled) or green (dispatched); no fill means no update yet. This is
+  authoritative and overrides the shipping-date guess whenever present — see the next
+  section for how it's read and merged. `operational_status` in `lib/orders.ts`
+  (`computeOperationalStatus`) falls back to a shipping-date-based guess (`Shipping Soon` /
+  `In Progress` / `Dispatched` / `Unknown`) only for orders with no color at all.
+
+### The manual row-color status signal
+
+Added 2026-08-04. Read carefully before changing anything here — the obvious
+implementation (read column A, fill continuation rows down from their parent order) is
+**not** what the code does, because real data ruled it out:
+
+- **Order No / Order Date / Shipping Date / Customer Name cells are vertically merged**
+  across a multi-line order in this sheet. Merged cells only report background color on
+  their anchor (top-left) cell via the Sheets API, so a continuation row reads as
+  uncolored in those specific columns even when the row genuinely is colored. Reading
+  color from **Product Name onward** (`mapping.productName` in `scripts/sync-sheets.mjs`
+  — the first non-merged, never-blank column) instead of column A avoids that trap
+  entirely, for every tab, since each tab's column layout differs.
+- Even so, **17 of 138 real multi-line orders had inconsistent colors across their own
+  lines** when checked directly (`scripts/lib/color.mjs` classification, verified against
+  live data before writing any aggregation logic) — always a `Dispatched` vs `No Update`
+  mix on different lines of the same order, never a real `Cancelled` vs `Dispatched`
+  conflict. A sequential "fill down from the previous row" approach would have been fragile
+  against this. Instead, `sheet_status_color` is stored per raw row, and
+  `stg_orders_measurement` (`supabase/migrations/0002`) aggregates it to one **order-level**
+  `sheet_status` via `bool_or(... = 'Cancelled') / bool_or(... = 'Dispatched')` — the same
+  pattern already used for `measurement_status` — with Cancelled taking precedence if
+  somehow both appear on one order.
+- Validated against the live sheet, not just "runs without errors": the 4 orders in April
+  2026 that `fact_orders` reports as `Cancelled` (`#5572`, `#5582`, `#5611`, `#5612`) were
+  independently confirmed as red rows by direct inspection first. `fact_orders`'s total row
+  count (1291) is unchanged from before this feature — Total Orders must never be filtered
+  by cancellation status; only the "Shipping in 5 days" and "Missing measurements" views
+  exclude `Cancelled` orders (confirmed, deliberate — see `rowsForTab` and `computeKpis` in
+  `lib/orders.ts`).
 - **The dedicated Country cell is frequently blank, especially from April 2026 onward**
   (July and August tabs were ~100% blank before the fallback below). Country info still
   exists for most of those orders, just embedded in the free-text Address field instead.
@@ -123,6 +189,34 @@ knowing before "fixing" something that's actually working as designed:
   (`supabase/migrations/0002`) recovered real data: `July 2026` was silently losing every
   product line after the first on each multi-line order (its row filter requires
   `shipping_date is not null`, and continuation rows had a blank one before the fix).
+  **Important nested bug found later (2026-08-05):** that fill-forward must be scoped
+  *within* each order (`partition by source_sheet, order_grp, ...`), not just by
+  `source_sheet` — a row can start its own new order (non-null `order_no`) while still
+  having a blank `shipping_date`/`customer_name` for an unrelated reason (see the MMVM
+  banner rows below), and without the `order_grp` boundary it would silently inherit a
+  *different, unrelated* order's shipping date. Confirmed against real data: order #6025
+  (July 2026) was inheriting order #6024's ship date before this fix.
+- **"MMVM" is a sister product line (`shopmmvm.com`, not `mahimamahajan.in`) with its own
+  tab, `MMVM 2026`** — added as an 11th entry in `MONTH_SHEETS` on 2026-08-05, 118+ real
+  orders, previously never synced at all. The other tabs sometimes have a giant merged
+  banner row that just says "MMVM" (April 2026 alone had 23 of these) — that's a
+  cross-reference marker meaning "this order number belongs to the MMVM line, see that
+  tab", not a real order in its host tab. Confirmed directly: order #6025 showed as such a
+  banner in July 2026 while its real data (customer, product, measurements, amounts) lived
+  in `MMVM 2026`.
+- **Marker/banner rows (the MMVM cross-references above, plus month-name section-label
+  rows like "MARCH"/"APRIL" within `MMVM 2026` itself) are dropped at ingestion**, not
+  treated as broken/incomplete orders. The rule in `scripts/sync-sheets.mjs`: a row with
+  *both* a blank product name and a blank customer name is not a real order line,
+  regardless of what marker text sits in its order-number cell — a genuine order or
+  continuation line always has at least one of those two filled in.
+- **Some measurement photos are floating images the Sheets API cannot see as cell data at
+  all** (confirmed: querying that cell returns completely empty — no value, no formula, no
+  merge). This is a hard API limitation, not a classification bug. Optional fix: the
+  [Apps Script image bridge](#apps-script-image-bridge-optional), which uses
+  `Sheet.getImages()` (only available inside Apps Script) to detect them. Without it, a
+  measurement provided *only* as a floating photo (no text in the cell) will show as
+  "Missing" — e.g. order #5217 (Feb 2026) until the bridge is deployed and re-synced.
 
 ## Freshness
 

@@ -16,7 +16,7 @@ import { kolkataToday } from './kolkata';
 
 const SELECT_COLUMNS =
   'order_no, customer_name, country, product_name, sku, order_date, shipping_date, ' +
-  'order_status, measurement_status, size_measurements, source_sheet, payment_mode, ' +
+  'order_status, sheet_status, measurement_status, size_measurements, source_sheet, payment_mode, ' +
   'order_amount_mrp, shipping_charges, customization_charges, discount, total, payment_received, balance';
 
 const PAGE_SIZE = 1000;
@@ -48,8 +48,8 @@ async function fetchAllFactOrders(): Promise<OrderRow[]> {
 
 export async function getDashboardData(filters: OrderFilters, tab: TableTab): Promise<DashboardResponse> {
   const rawRows = await fetchAllFactOrders();
-  // One "today" for the whole request so every row's estimated_status is consistent,
-  // computed in Asia/Kolkata regardless of server or visitor timezone.
+  // One "today" for the whole request so every row's operational_status fallback guess is
+  // consistent, computed in Asia/Kolkata regardless of server or visitor timezone.
   const allRows = enrichRows(rawRows, kolkataToday());
   const filtered = applyFilters(allRows, filters);
   const tableRows = rowsForTab(filtered, tab);
