@@ -4,13 +4,13 @@
 -- refreshed on a schedule by pg_cron (see 0004).
 
 create materialized view if not exists fact_orders as
-select distinct on (order_no_filled, product_name, sku, order_date)
+select distinct on (order_no_filled, product_name, sku, order_date_filled)
   order_no_filled           as order_no,
   customer_name_filled      as customer_name,
   country,
   product_name,
   sku,
-  order_date,
+  order_date_filled         as order_date,
   shipping_date_filled      as shipping_date,
   order_status,
   case when order_has_measurement then 'Received' else 'Missing' end as measurement_status,
@@ -27,7 +27,7 @@ select distinct on (order_no_filled, product_name, sku, order_date)
   coalesce(balance, 0)               as balance
 from stg_orders_measurement
 where order_no_filled is not null
-order by order_no_filled, product_name, sku, order_date, source_row_number desc;
+order by order_no_filled, product_name, sku, order_date_filled, source_row_number desc;
 
 -- Needed so `REFRESH MATERIALIZED VIEW CONCURRENTLY` (no read lock during refresh) works.
 create unique index if not exists fact_orders_uidx
