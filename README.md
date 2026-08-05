@@ -126,7 +126,12 @@ knowing before "fixing" something that's actually working as designed:
   authoritative and overrides the shipping-date guess whenever present — see the next
   section for how it's read and merged. `operational_status` in `lib/orders.ts`
   (`computeOperationalStatus`) falls back to a shipping-date-based guess (`Shipping Soon` /
-  `In Progress` / `Dispatched` / `Unknown`) only for orders with no color at all.
+  `In Progress` / `Delayed` / `Unknown`) only for orders with no color at all.
+  **`Delayed`** (added 2026-08-05) means the ship date has passed and the row was never
+  marked green — this used to fall back to `Dispatched` (an optimistic guess straight from
+  the original build spec), corrected once it was clear staff only mark a row green once
+  it's actually gone out, so an uncolored overdue row means it genuinely hasn't shipped,
+  not that it probably has. Surfaced as its own "Delayed orders" table tab.
 
 ### The manual row-color status signal
 
