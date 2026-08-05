@@ -17,7 +17,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # @supabase/supabase-js requires Node 22+ (native WebSocket support -- its
+          # RealtimeClient checks for this at construction time even though this script
+          # never uses Realtime). Must match package.json's engines field and local dev.
+          node-version: 22
           cache: npm
 
       - run: npm ci
