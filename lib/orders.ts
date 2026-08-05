@@ -28,10 +28,16 @@ export type OrderRow = {
 // date-based guess is used only as a fallback for orders with no color at all ('No
 // Update'), since the sheet has no other dispatch/status column (confirmed by inspecting
 // every tab's headers directly).
-export type OperationalStatus = 'Cancelled' | 'Dispatched' | 'Shipping Soon' | 'In Progress' | 'Unknown';
+//
+// 'Delayed' -- ship date has passed and the row was never marked green -- used to fall
+// back to 'Dispatched' (an optimistic guess). Corrected: if staff only mark a row green
+// once it's actually gone out, an uncolored row past its ship date means it genuinely
+// hasn't been dispatched yet, not that it probably has.
+export type OperationalStatus = 'Cancelled' | 'Dispatched' | 'Delayed' | 'Shipping Soon' | 'In Progress' | 'Unknown';
 export const OPERATIONAL_STATUSES: OperationalStatus[] = [
   'Cancelled',
   'Dispatched',
+  'Delayed',
   'Shipping Soon',
   'In Progress',
   'Unknown',
@@ -49,7 +55,7 @@ export function computeOperationalStatus(
   // No color signal at all for this order -- fall back to a guess from shipping_date.
   if (!shippingDate) return 'Unknown';
   const d = daysBetween(today, shippingDate);
-  if (d < 0) return 'Dispatched';
+  if (d < 0) return 'Delayed';
   if (d <= 5) return 'Shipping Soon';
   return 'In Progress';
 }
@@ -84,7 +90,7 @@ export function isCancelled(r: EnrichedOrderRow): boolean {
 export function operationalStatusPillClass(status: OperationalStatus): 'good' | 'warn' | 'bad' | 'neutral' {
   if (status === 'Dispatched') return 'good';
   if (status === 'Shipping Soon') return 'warn';
-  if (status === 'Cancelled' || status === 'Unknown') return 'bad';
+  if (status === 'Cancelled' || status === 'Unknown' || status === 'Delayed') return 'bad';
   return 'neutral'; // In Progress
 }
 
@@ -241,7 +247,7 @@ export function computeCharts(rows: EnrichedOrderRow[]) {
   };
 }
 
-export type TableTab = 'all' | 'shipping5' | 'missing' | 'balance';
+export type TableTab = 'all' | 'shipping5' | 'missing' | 'balance' | 'delayed';
 
 export function rowsForTab(rows: EnrichedOrderRow[], tab: TableTab): EnrichedOrderRow[] {
   // 'all' and 'balance' intentionally do NOT exclude cancelled orders -- only the two
@@ -249,6 +255,7 @@ export function rowsForTab(rows: EnrichedOrderRow[], tab: TableTab): EnrichedOrd
   if (tab === 'shipping5') return rows.filter((r) => r.operational_status === 'Shipping Soon');
   if (tab === 'missing') return rows.filter((r) => !isMeasurementComplete(r) && !isCancelled(r));
   if (tab === 'balance') return rows.filter((r) => r.balance > 0);
+  if (tab === 'delayed') return rows.filter((r) => r.operational_status === 'Delayed');
   return rows;
 }
 

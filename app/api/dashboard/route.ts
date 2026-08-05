@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDashboardData } from '@/lib/dashboard-data';
 import type { TableTab } from '@/lib/orders';
 
-const VALID_TABS: TableTab[] = ['all', 'shipping5', 'missing', 'balance'];
+const VALID_TABS: TableTab[] = ['all', 'shipping5', 'missing', 'balance', 'delayed'];
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;

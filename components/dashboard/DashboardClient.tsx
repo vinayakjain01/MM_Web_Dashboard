@@ -12,6 +12,7 @@ type Mode = 'visuals' | 'tables';
 const TABLE_TABS: { key: TableTab; label: string }[] = [
   { key: 'all', label: 'All orders' },
   { key: 'shipping5', label: 'Shipping in 5 days' },
+  { key: 'delayed', label: 'Delayed orders' },
   { key: 'missing', label: 'Missing measurements' },
   { key: 'balance', label: 'Balance due' },
 ];
@@ -38,7 +39,7 @@ async function fetcher(url: string): Promise<DashboardResponse> {
 }
 
 export function DashboardClient({ initialData }: { initialData: DashboardResponse }) {
-  const [mode, setMode] = useState<Mode>('visuals');
+  const [mode, setMode] = useState<Mode>('tables');
   const [tab, setTab] = useState<TableTab>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -118,10 +119,10 @@ export function DashboardClient({ initialData }: { initialData: DashboardRespons
           </span>
           <div className="toggle" role="group" aria-label="View switch">
             <button className={mode === 'visuals' ? 'active' : ''} onClick={() => setMode('visuals')}>
-              Visuals
+              Analysis
             </button>
             <button className={mode === 'tables' ? 'active' : ''} onClick={() => setMode('tables')}>
-              Tables
+              Order Data
             </button>
           </div>
         </div>
@@ -207,7 +208,7 @@ export function DashboardClient({ initialData }: { initialData: DashboardRespons
         </div>
       ) : (
         <div>
-          <h2 className="section-title">Order tables</h2>
+          <h2 className="section-title">Order Data</h2>
           <div className="table-card">
             <div className="tab-bar">
               {TABLE_TABS.map((t) => (
