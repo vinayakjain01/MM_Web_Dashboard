@@ -136,15 +136,25 @@ function monthLabel(key: string): string {
   });
 }
 
-export function applyFilters(rows: EnrichedOrderRow[], f: OrderFilters): EnrichedOrderRow[] {
+export function applyFilters(
+  rows: EnrichedOrderRow[],
+  f: OrderFilters,
+  opts: { ignoreDateRange?: boolean } = {},
+): EnrichedOrderRow[] {
   const search = (f.search || '').toLowerCase().trim();
   return rows.filter((r) => {
-    // A missing order_date must NOT pass a date-range filter just because there's
-    // nothing to compare against -- an order we can't confirm falls in range should be
-    // excluded, not shown by default (this previously let every null-order_date row
-    // through regardless of the selected range).
-    if (f.from && (!r.order_date || r.order_date < f.from)) return false;
-    if (f.to && (!r.order_date || r.order_date > f.to)) return false;
+    // "Shipping in 5 days" and "Delayed" are always relative to *today*, not the
+    // selected date range -- callers pass ignoreDateRange for those two so the From/To
+    // filter can't hide orders that need attention right now. Every other filter below
+    // still applies to them.
+    if (!opts.ignoreDateRange) {
+      // A missing order_date must NOT pass a date-range filter just because there's
+      // nothing to compare against -- an order we can't confirm falls in range should be
+      // excluded, not shown by default (this previously let every null-order_date row
+      // through regardless of the selected range).
+      if (f.from && (!r.order_date || r.order_date < f.from)) return false;
+      if (f.to && (!r.order_date || r.order_date > f.to)) return false;
+    }
     if (f.country && r.country !== f.country) return false;
     if (f.opStatus && r.operational_status !== f.opStatus) return false;
     if (f.measStatus && r.measurement_status !== f.measStatus) return false;

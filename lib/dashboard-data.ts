@@ -46,23 +46,39 @@ async function fetchAllFactOrders(): Promise<OrderRow[]> {
   return rows;
 }
 
+const DATE_INDEPENDENT_TABS: TableTab[] = ['shipping5', 'delayed'];
+
 export async function getDashboardData(filters: OrderFilters, tab: TableTab): Promise<DashboardResponse> {
   const rawRows = await fetchAllFactOrders();
   // One "today" for the whole request so every row's operational_status fallback guess is
   // consistent, computed in Asia/Kolkata regardless of server or visitor timezone.
   const allRows = enrichRows(rawRows, kolkataToday());
   const filtered = applyFilters(allRows, filters);
-  const tableRows = rowsForTab(filtered, tab);
+
+  // "Shipping in 5 days" and "Delayed" are operational "what needs attention right now"
+  // views -- always relative to today, never to the selected From/To range, so the Date
+  // Filter can't hide an order that's overdue or about to ship. Every other filter
+  // (country/status/measurement/search) still applies to them.
+  const filteredIgnoringDateRange = applyFilters(allRows, filters, { ignoreDateRange: true });
+
+  const tableSourceRows = DATE_INDEPENDENT_TABS.includes(tab) ? filteredIgnoringDateRange : filtered;
+  const tableRows = rowsForTab(tableSourceRows, tab);
+
+  const kpis = computeKpis(filtered);
+  // Keep the "Shipping in 5 days" KPI card consistent with its own table tab -- both must
+  // reflect the same date-independent definition, or the number on the card would drift
+  // from the list you see when you click into it.
+  kpis.shippingIn5Days = rowsForTab(filteredIgnoringDateRange, 'shipping5').length;
 
   return {
-    kpis: computeKpis(filtered),
+    kpis,
     charts: computeCharts(filtered),
     filterOptions: filterOptions(allRows),
     table: {
       tab,
       rows: tableRows,
       count: tableRows.length,
-      filteredTotal: filtered.length,
+      filteredTotal: tableSourceRows.length,
     },
     meta: {
       dataAsOf: new Date().toISOString(),
