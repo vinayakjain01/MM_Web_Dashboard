@@ -9,6 +9,8 @@ import type { DashboardResponse, TableTab } from '@/lib/orders';
 
 type Mode = 'visuals' | 'tables';
 
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/19g0hXf71pX5Oh0bGeaN-nJifU-jkPExTvgdnl1CUCd8/';
+
 const TABLE_TABS: { key: TableTab; label: string }[] = [
   { key: 'all', label: 'All orders' },
   { key: 'shipping5', label: 'Shipping in 5 days' },
@@ -108,7 +110,17 @@ export function DashboardClient({ initialData }: { initialData: DashboardRespons
         <div className="brand">
           <div className="brand-mark">MM</div>
           <div className="brand-text">
-            <h1>Mahima Mahajan</h1>
+            <div className="brand-title-row">
+              <h1>Mahima Mahajan</h1>
+              <a href={SHEET_URL} target="_blank" rel="noopener noreferrer" className="sheet-link">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.3" />
+                  <path d="M1.5 6H14.5" stroke="currentColor" strokeWidth="1.3" />
+                  <path d="M6 6V14.5" stroke="currentColor" strokeWidth="1.3" />
+                </svg>
+                Sheet Link
+              </a>
+            </div>
             <p>Dispatch &amp; fulfilment studio — live order dashboard</p>
           </div>
         </div>

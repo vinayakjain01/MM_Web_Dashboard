@@ -47,8 +47,17 @@ h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;margin:0;}
   color:#fff;font-family:'Fraunces',serif;font-size:20px;font-weight:600;
   box-shadow:0 6px 14px var(--shadow);
 }
+.brand-title-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
 .brand-text h1{font-size:26px;color:var(--primary-dark);letter-spacing:.2px;}
 .brand-text p{margin:2px 0 0;font-size:13px;color:var(--text-secondary);}
+.sheet-link{
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:'Manrope',sans-serif;font-weight:600;font-size:12.5px;
+  color:var(--primary-light);text-decoration:none;white-space:nowrap;
+  transition:color .15s ease,opacity .15s ease;
+}
+.sheet-link svg{flex-shrink:0;}
+.sheet-link:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px;opacity:.9;}
 .topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .sync-tag{font-size:12px;color:var(--text-muted);border:1px solid var(--border);border-radius:20px;padding:6px 12px;background:var(--surface);display:inline-flex;align-items:center;}
 .sync-tag i{color:var(--teal);margin-right:5px;font-style:normal;}
