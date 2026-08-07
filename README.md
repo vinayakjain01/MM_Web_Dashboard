@@ -201,6 +201,13 @@ implementation (read column A, fill continuation rows down from their parent ord
   banner rows below), and without the `order_grp` boundary it would silently inherit a
   *different, unrelated* order's shipping date. Confirmed against real data: order #6025
   (July 2026) was inheriting order #6024's ship date before this fix.
+  `order_date` and `country` were each missed from this same fill-forward set entirely
+  (not scoped wrong, just absent) in two later passes — same merged-cell block, same fix.
+  Confirmed via order #5988 (null `order_date` on its 2nd line) and order #5240 (its 1st
+  line correctly showed "Oman", its 2nd/3rd lines showed no country at all). If a field
+  from this block (Order No / Order Date / Shipping Date / Customer Name / Country) shows
+  unexpected nulls again later, check whether it's in `stg_orders_filled`'s fill-forward
+  list before assuming it's a new bug class — it's happened three times now.
 - **"MMVM" is a sister product line (`shopmmvm.com`, not `mahimamahajan.in`) with its own
   tab, `MMVM 2026`** — added as an 11th entry in `MONTH_SHEETS` on 2026-08-05, 118+ real
   orders, previously never synced at all. The other tabs sometimes have a giant merged
