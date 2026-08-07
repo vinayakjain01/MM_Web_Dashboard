@@ -3,13 +3,14 @@
 -- server-side in the Next.js API routes from fact_orders (see 0003).
 
 -- 1) Fill-forward. Every tab has "sub-item" rows directly below a main order (extra
---    product lines on the same order) that leave order_no, order_date, shipping_date, and
---    customer_name blank because they're implied from the row above (all four sit in the
---    same vertically-merged block in the live sheet -- order_date was missed in an
---    earlier pass since the original spec never named it, but it needs the identical
---    treatment; confirmed against real data: order #5988's second line had a null
---    order_date despite its first line carrying the real date, which meant the KPI
---    date-range filter silently mismatched it).
+--    product lines on the same order) that leave order_no, order_date, shipping_date,
+--    customer_name, and country blank because they're implied from the row above (all
+--    five sit in the same vertically-merged block in the live sheet -- order_date and
+--    country were each missed in an earlier pass since the original spec never named
+--    them, but both need the identical treatment; confirmed against real data: order
+--    #5988's second line had a null order_date despite its first line carrying the real
+--    date, and order #5240's 2nd/3rd product lines (ZARA, CHAYA) showed no country while
+--    its 1st line (Masuma) correctly showed "Oman").
 --
 --    The original build spec scoped shipping_date fill-forward to "Mehfill orders, June
 --    2026 / EOSS only" and customer_name to "Mehfill orders only" -- but inspecting the
@@ -39,7 +40,8 @@ with tagged as (
     count(order_no) over (partition by source_sheet order by source_row_number)      as order_grp,
     count(customer_name) over (partition by source_sheet order by source_row_number) as customer_grp_raw,
     count(order_date) over (partition by source_sheet order by source_row_number)     as order_date_grp_raw,
-    count(shipping_date) over (partition by source_sheet order by source_row_number)  as ship_grp_raw
+    count(shipping_date) over (partition by source_sheet order by source_row_number)  as ship_grp_raw,
+    count(country) over (partition by source_sheet order by source_row_number)        as country_grp_raw
   from raw_orders r
 )
 select
@@ -47,7 +49,8 @@ select
   first_value(order_no) over (partition by source_sheet, order_grp order by source_row_number) as order_no_filled,
   first_value(customer_name) over (partition by source_sheet, order_grp, customer_grp_raw order by source_row_number) as customer_name_filled,
   first_value(order_date) over (partition by source_sheet, order_grp, order_date_grp_raw order by source_row_number) as order_date_filled,
-  first_value(shipping_date) over (partition by source_sheet, order_grp, ship_grp_raw order by source_row_number) as shipping_date_filled
+  first_value(shipping_date) over (partition by source_sheet, order_grp, ship_grp_raw order by source_row_number) as shipping_date_filled,
+  first_value(country) over (partition by source_sheet, order_grp, country_grp_raw order by source_row_number) as country_filled
 from tagged t;
 
 -- 2) Row filters, matching the original recipe per sheet:

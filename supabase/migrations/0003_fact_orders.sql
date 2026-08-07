@@ -7,7 +7,7 @@ create materialized view if not exists fact_orders as
 select distinct on (order_no_filled, product_name, sku, order_date_filled)
   order_no_filled           as order_no,
   customer_name_filled      as customer_name,
-  country,
+  country_filled            as country,
   product_name,
   sku,
   order_date_filled         as order_date,
