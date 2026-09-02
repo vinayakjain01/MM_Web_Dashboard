@@ -63,6 +63,17 @@ Add one entry to the `MONTH_SHEETS` array in `scripts/sync-sheets.mjs` (title + 
 SQL migration needed — `raw_orders` is one table for every tab, discriminated by
 `source_sheet`; a new tab just becomes a new `source_sheet` value on the next sync.
 
+**A tab's header cells aren't stable over time.** July 2026's "Order No" header cell was
+cleared in the live sheet sometime after it was first onboarded (2026-08-05) — the
+column-mapping in `TAB_OVERRIDES` (`scripts/lib/sheet-columns.mjs`) had matched it by
+exact header name, so the lookup started failing and every row in that tab got
+`order_no = null`, silently dropping all 187 of its orders from `fact_orders`. The sync
+script does warn when a configured override stops matching (`"<tab>": configured
+order-no header "..." not found ... falling back to generic detection`) — **treat that
+warning as a data-loss alarm, not a cosmetic one**, and check `raw_orders` for the
+affected tab immediately (`count(*) filter (where order_no is null)`). Fixed the same way
+as May 2026 / June 2026 EOSS: match column 0 by position instead of by header text.
+
 ## Apps Script image bridge (optional)
 
 Some measurement photos are pasted into the sheet as **floating images** (Insert > Image
