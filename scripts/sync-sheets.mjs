@@ -46,6 +46,7 @@ export const MONTH_SHEETS = [
   // cross-reference markers pointing here, not real orders in their host tab -- those get
   // dropped at ingestion (see the marker-row check below), not counted as broken orders.
   { title: 'MMVM 2026', gid: 1352270413 },
+  { title: 'September 2026', gid: 246069390 },
 ];
 
 const NUMERIC_FIELDS = {

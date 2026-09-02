@@ -75,9 +75,16 @@ export const TAB_OVERRIDES = {
   // order number ("#5621" etc.) despite the bad header text.
   'May 2026': { orderNoColumnIndex: 0 },
   'June 2026 / EOSS': { orderNoColumnIndex: 0 },
-  'July 2026': { orderNoColumn: 'Order No' },
+  // Header cell for this column now reads blank in the live sheet (used to say "Order
+  // No" -- someone cleared it). Match by position instead, same as May 2026 / June 2026
+  // EOSS: confirmed the real order number ("#6019" etc.) still lives in column 0.
+  // Discovered 2026-08-05 when this exact-name lookup started failing and the generic
+  // synonym fallback found nothing at all (safe, but still meant every row in this tab
+  // got order_no = null, which silently dropped the entire tab from fact_orders).
+  'July 2026': { orderNoColumnIndex: 0 },
   'August 2026': { orderNoColumn: 'Order No' },
   'MMVM 2026': { orderNoColumn: 'Order Number ' },
+  'September 2026': { orderNoColumn: 'Order No' },
 };
 
 export function normHeader(s) {
