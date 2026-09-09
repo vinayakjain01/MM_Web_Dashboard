@@ -102,6 +102,7 @@ flagged as (
       or size_measurements_norm ilike '%to be shared%'
       or size_measurements_norm ilike '%will share%'
       or size_measurements_norm ilike '%will give%'
+      or size_measurements_norm ilike '%yet to confirm%'
     ) as is_placeholder
   from normed
 ),
