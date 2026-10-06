@@ -85,6 +85,7 @@ export const TAB_OVERRIDES = {
   'August 2026': { orderNoColumn: 'Order No' },
   'MMVM 2026': { orderNoColumn: 'Order Number ' },
   'September 2026': { orderNoColumn: 'Order No' },
+  'Ocotber2026': { orderNoColumn: 'Order No' },
 };
 
 export function normHeader(s) {

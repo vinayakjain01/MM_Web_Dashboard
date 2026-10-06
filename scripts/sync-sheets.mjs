@@ -47,6 +47,10 @@ export const MONTH_SHEETS = [
   // dropped at ingestion (see the marker-row check below), not counted as broken orders.
   { title: 'MMVM 2026', gid: 1352270413 },
   { title: 'September 2026', gid: 246069390 },
+  // Sheet's own tab title has a typo ("Ocotber" not "October") -- use it verbatim, not
+  // the corrected spelling, or the exact-title match fails and this falls back to the
+  // gid-match warning path for no reason.
+  { title: 'Ocotber2026', gid: 1291508831 },
 ];
 
 const NUMERIC_FIELDS = {
